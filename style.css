@@ -1,0 +1,12 @@
+body
+{
+    background-color: slategrey;
+}
+#selectedRom
+{
+    display: none;
+}
+#glCanvas
+{
+    display: block;
+}

@@ -1,0 +1,108 @@
+<!doctype html>
+
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+
+    <title>JavaScript GameBoy</title>
+    <meta name="GameBoy Emulator with Link Cable support" content="GB Emulator">
+    <meta name="Natan Sachakov" content="">
+
+    <link rel="stylesheet" href="style.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+    <script src="client/angular/angular.min.js"></script>
+    <script src="emulator/cpu.js"></script>
+    <script src="emulator/gpu.js"></script>
+    <script src="emulator/mmu.js"></script>
+    <script src="emulator/joyPad.js"></script>
+    <script src="emulator/timer.js"></script>
+    <script src="emulator/serial.js"></script>
+    <script src="emulator/emulator.js"></script>
+    <script src="client/angular/controllers/emulatorController.js"></script>
+    <script src="client/angular/directives/emulatorDirective.js"></script>
+</head>
+    
+<body ng-app="emulatorApp">
+    
+    <button type="button" id="fileSelect" onclick="document.getElementById('selectedRom').click();">Open File...</button>
+    
+    <input type="file" id="selectedRom" onchange="openFile()" />
+    
+    <button id="step" onclick="step();">step</button>
+    
+    
+    <div ng-controller="emulatorCtrl">
+        <canvas id="glCanvas" width="160" height="144" tabindex="1"></canvas>
+    </div>
+    
+    <!--
+    <emulator ></emulator>
+    -->
+    
+    <script>
+        $("document").ready(function(){
+        /*
+            $("#selectedRom").on("change", openFile);
+            $("#step").on("click", step);
+        
+            $("#fileSelect").on("click", function(){
+                $("#selectedRom").click();
+            });
+            
+            $("canvas").keydown(function(event){
+                controller.keypress(event);
+            });
+            $("canvas").keyup(function(event){
+                controller.keyrelease(event);
+            });
+        */
+        });
+        var canvas = document.getElementById('glCanvas');
+        
+        var emulator = new EMULATOR();
+        var gl = canvas.getContext('2d');
+        //var gl = $("#glCanvas").get(0).getContext('2d');
+        var imgData = gl.createImageData(160,144);
+        
+        var client = new WebSocket('ws://104.162.164.238:8080/');
+        client.onopen = function(){
+            client.send("hello");
+            client.send("second message");
+        };
+        var i  = 0;
+        function openFile(){
+            
+            var reader = new FileReader();
+            reader.onload = function()
+            {
+                emulator.mmu.loadROM(this.result);
+                emulator.mmu.setup();
+                emulator.gameOn = true;
+            }
+            var doc = document.getElementById('selectedRom').files[0];
+            var fd = reader.readAsArrayBuffer(doc);//will call onload function at end
+        }
+        
+        function step(){
+            setInterval(gameLoop,1000/60);
+        }
+
+        function draw(){
+
+            imgData.data.set(new Uint8ClampedArray(emulator.gpu.pixelData));
+            gl.putImageData(imgData,0,0);
+        }
+        
+        function gameLoop(){
+            emulator.gameLoop(draw);
+        }  
+        
+        canvas.addEventListener("keydown",function(event){
+            emulator.controller.keypress(event)
+        },false);
+        canvas.addEventListener("keyup",function(event){
+            emulator.controller.keyrelease(event)
+        },false);
+    </script>
+
+</body>
