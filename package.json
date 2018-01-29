@@ -1,0 +1,27 @@
+{
+  "name": "javascriptgameboy",
+  "version": "1.0.0",
+  "description": "Javascript GameBoy emulator",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/djdjalpha11/JavascriptGameBoy.git"
+  },
+  "keywords": [
+    "Javascript",
+    "GameBoy",
+    "emulator"
+  ],
+  "author": "Natan Sachakov",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/djdjalpha11/JavascriptGameBoy/issues"
+  },
+  "homepage": "https://github.com/djdjalpha11/JavascriptGameBoy#readme",
+  "dependencies": {
+    "express": "^4.16.2"
+  }
+}
