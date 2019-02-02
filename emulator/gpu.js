@@ -4,10 +4,14 @@ function GPU(mmu){
     
     this.LCDC = this.mmu.readGPU(0xFF40);
     this.STAT = this.mmu.readGPU(0xFF41);
+    this.tileVramBankNumber = 0;
     this.LY = 0;//current scanline
     this.LYC = 0;//compare vertical line to scanline
     this.hblankCycles = 456;
     
+    this.red = 0;
+	this.green = 0;
+	this.blue = 0;
     this.pixelData = [];
     this.offset = 0;
     this.maxPixels = 160*144*4;//height*width*rgba
@@ -195,12 +199,23 @@ GPU.prototype.drawScanLine = function(){
 
 			var tileCol = (xPos>>3)%1024;
 			var tileNum;
-
-			if(unsig)
-				tileNum = this.mmu.readGPU(backgroundMemory+tileRow + tileCol);
-			else
-				tileNum = this.getSign(this.mmu.readGPU(backgroundMemory+tileRow + tileCol));
-
+            
+            var BGMapAttributes = this.mmu.readGPU((backgroundMemory+tileRow + tileCol),1);
+            this.tileVramBankNumber = BGMapAttributes&(1<<3) ? 1:0;
+            if(this.mmu.inCGBMode)
+            {
+                if(unsig)
+                    tileNum = this.mmu.readCGBGPU((backgroundMemory+tileRow + tileCol),this.tileVramBankNumber);
+                else
+                    tileNum = this.getSign(this.mmu.readCGBGPU((backgroundMemory+tileRow + tileCol),this.tileVramBankNumber));
+            }
+            else
+            {
+                if(unsig)
+                    tileNum = this.mmu.readGPU(backgroundMemory+tileRow + tileCol);
+                else
+                    tileNum = this.getSign(this.mmu.readGPU(backgroundMemory+tileRow + tileCol));
+            }
 			var tileLocation = tileData;
 
 			if (unsig)
@@ -209,36 +224,36 @@ GPU.prototype.drawScanLine = function(){
 				tileLocation += ((tileNum+128) << 4);
             
 			var line = (yPos % 8)<<1;
-			var data1 = this.mmu.readGPU(tileLocation + line);
-			var data2 = this.mmu.readGPU(tileLocation + line + 1);
-
+			var data1;
+			var data2;
+            if(this.mmu.inCGBMode)
+            {
+                data1 = this.mmu.readCGBGPU((tileLocation + line),this.tileVramBankNumber);
+                data2 = this.mmu.readCGBGPU((tileLocation + line + 1),this.tileVramBankNumber);
+            }
+            else
+            {
+                data1 = this.mmu.readGPU(tileLocation + line);
+                data2 = this.mmu.readGPU(tileLocation + line + 1);
+            }
 			var colorBit = Math.abs((xPos % 8)-7);
 
 			var colorNum = ((data2&(1<<colorBit)) ? 1:0) << 1;
 			colorNum |= (data1&(1<<colorBit)) ? 1:0;
 
-			var col = this.getColor(colorNum, 0xFF47);
-            //black
-			var red = 0;
-			var green = 0;
-			var blue = 0;
-			switch(col)
-			{
-			case 'WHITE':	
-                    red = 255; green = 255; blue = 255; 
-                    break;
-			case 'LIGHT_GRAY':
-                    red = 0xCC; green = 0xCC; blue = 0xCC; 
-                    break;
-			case 'DARK_GRAY':	
-                    red = 0x77; green = 0x77; blue = 0x77; 
-                    break;
-			}
-
+            if(this.mmu.inCGBMode)
+            {
+                var palette = (BGMapAttributes &(0x11100000)>>5);
+                this.getCGBColor(colorNum, palette);
+            }
+            else
+            {
+                this.getColor(colorNum, 0xFF47);
+            }
             
-            this.pixelData[pixel*4+0+this.offset] = red;
-            this.pixelData[pixel*4+1+this.offset] = green;
-            this.pixelData[pixel*4+2+this.offset] = blue;
+            this.pixelData[pixel*4+0+this.offset] = this.red;
+            this.pixelData[pixel*4+1+this.offset] = this.green;
+            this.pixelData[pixel*4+2+this.offset] = this.blue;
             this.pixelData[pixel*4+3+this.offset] = 255;//alpha transparancy
 		}
         this.offset = this.LY*640;
@@ -277,9 +292,18 @@ GPU.prototype.renderSprites = function(){
  				}
 
  				line = Math.abs(line<<1);
- 				var data1 = this.mmu.readGPU( (0x8000 + (tileLocation << 4)) + line);
- 				var data2 = this.mmu.readGPU( (0x8000 + (tileLocation << 4)) + line+1);
-
+ 				var data1;
+ 				var data2;
+                if(this.mmu.inCGBMode)
+                {
+                    data1 = this.mmu.readCGBGPU(((0x8000 + (tileLocation << 4)) + line),this.tileVramBankNumber);
+                    data2 = this.mmu.readCGBGPU(((0x8000 + (tileLocation << 4)) + line+1),this.tileVramBankNumber);
+                }
+                else
+                {
+                    data1 = this.mmu.readGPU( (0x8000 + (tileLocation << 4) + line));
+ 				    data2 = this.mmu.readGPU( (0x8000 + (tileLocation << 4) + line+1));
+                }
 
 
  				for (var tilePixel = 0; tilePixel <= 7; tilePixel++)
@@ -287,13 +311,21 @@ GPU.prototype.renderSprites = function(){
 					var colorBit = tilePixel;
  					if (xFlip)
  					{
- 						colorBit -= 7;
- 						colorBit = Math.abs(colorBit);
+ 						colorBit = 7 - colorBit;
  					}
                     var colorNum = ((data2&(1<<colorBit)) ? 1:0) << 1;
                     colorNum |= (data1&(1<<colorBit)) ? 1:0;
-
-					var col = this.getColor(colorNum, (attributes&(1<<4))?0xFF49:0xFF48);
+                    var BGMapAttributes = this.mmu.readGPU((backgroundMemory+tileRow + tileCol),1);
+                    
+                    if(this.mmu.inCGBMode)
+                    {
+                        var palette = (BGMapAttributes &(0x11100000)>>5);
+                        this.getCGBColor(colorNum, palette);
+                    }
+					else
+                    {
+                        this.getColor(colorNum, (attributes&(1<<4))?0xFF49:0xFF48);
+                    }
                     
                     var xPix = 7 - tilePixel;
 					var pixel = xPos+xPix;
@@ -306,25 +338,12 @@ GPU.prototype.renderSprites = function(){
                     //*/
  					// white is transparent for sprites
                     //also check if pixel is hidden behind background
- 					if (col == 'WHITE' || pixelObscured)
+ 					if ((this.red==255&&this.green==255&&this.blue==255) || pixelObscured)
  						continue;
-                    //black				
- 					var red = 0;
- 					var green = 0;
- 					var blue = 0;
-
-					switch(col)
-					{
-                        
-                        case 'LIGHT_GRAY': red = 0xCC; green = 0xCC; blue = 0xCC; 
-                            break;
-                        case 'DARK_GRAY': red = 0x77; green = 0x77; blue = 0x77; 
-                            break;
-					}
                     
-                    this.pixelData[pixel*4+0+((scanline-1)*640)] = red;
-                    this.pixelData[pixel*4+1+((scanline-1)*640)] = green;
-                    this.pixelData[pixel*4+2+((scanline-1)*640)] = blue;
+                    this.pixelData[pixel*4+0+((scanline-1)*640)] = this.red;
+                    this.pixelData[pixel*4+1+((scanline-1)*640)] = this.green;
+                    this.pixelData[pixel*4+2+((scanline-1)*640)] = this.blue;
                     this.pixelData[pixel*4+3+((scanline-1)*640)] = 255;//alpha transparancy
  				
                 }
@@ -334,7 +353,6 @@ GPU.prototype.renderSprites = function(){
     
 }
 GPU.prototype.getColor = function(colorNum, address){
-    var res = 'WHITE';
 	var palette = this.mmu.readGPU(address);
 	var hi = 0;;
 	var lo = 0;
@@ -353,13 +371,21 @@ GPU.prototype.getColor = function(colorNum, address){
 
 	switch (color)
 	{
-        case 0: res = 'WHITE';break;
-        case 1: res = 'LIGHT_GRAY';break;
-        case 2: res = 'DARK_GRAY';break;
-        case 3: res = 'BLACK';break;
+        case 0: this.red = 255; this.green = 255; this.blue = 255;break;
+        case 1: this.red = 0xCC; this.green = 0xCC; this.blue = 0xCC;break;
+        case 2: this.red = 0x77; this.green = 0x77; this.blue = 0x77;break;
+        case 3: this.red = 0; this.green = 0; this.blue = 0;break;
 	}
+}
+GPU.prototype.getCGBColor = function(colorNum, palette){
+    
+    var colorByte1 = this.mmu.cgbColor[palette*8 + colorNum*2];
+    var colorByte2 = this.mmu.cgbColor[palette*8 + colorNum*2 +1];
+    var color = colorByte1 << 8 | colorByte2;
+	this.red   = color & 0b1111100000000000;
+    this.green = color & 0b0000011111000000;
+    this.black = color & 0b0000000000111110;
 
-	return res;
 }
 GPU.prototype.getSign = function(value){
     return (value&0b01111111)-(value&0b10000000);

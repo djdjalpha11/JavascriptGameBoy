@@ -1,5 +1,5 @@
 function EMULATOR(){
-    this.controller = new JOYPAD(this.mmu);
+    this.controller = new JOYPAD();
     this.mmu = new MMU(this.controller);
     this.cpu = new CPU(this.mmu);
     this.gpu = new GPU(this.mmu);

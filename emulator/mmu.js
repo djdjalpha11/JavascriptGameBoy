@@ -5,6 +5,9 @@ function MMU(controller) {
     this.rom = [];
     this.cartridgeRAM = [];
     this.wram = [];
+    this.extraVram = [];
+    this.cgbColor = [];
+    this.inCGBMode = false;
     
     this.currentROMBank = 1;
     this.previousRAMBank = 0;
@@ -32,9 +35,16 @@ function MMU(controller) {
     this.clocksToUpdateDIV = 0;
     this.clocksToUpdateTIMA = 0;
 }
-MMU.prototype.readGPU = function(index){
+MMU.prototype.readGPU = function(index,vramBank){
     
     return this.wram[index];
+}
+MMU.prototype.readCGBGPU = function(index,vramBank){
+    
+    if(vramBank===0)
+        return this.wram[index];
+    else
+        return this.extraVram[index];
 }
 MMU.prototype.read = function(index){
     
@@ -371,7 +381,7 @@ MMU.prototype.write = function(index, value){
             this.updatedClockSpeed = true;
 		}
 	} 
-	// FF44 shows which horizontal scanline is currently being draw. Writing here resets it
+	// FF44 shows which horizontal scanline is currently being drawn. Writing here resets it
 	else if (index == 0xFF44)
 	{
 		this.wram[0xFF44] = 0;
